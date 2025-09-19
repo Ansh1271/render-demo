@@ -1,7 +1,6 @@
 import os
 import torch
 import pickle
-import gdown
 from flask import Flask, request, jsonify, render_template
 from transformers import BertTokenizer, BertForSequenceClassification
 
@@ -9,8 +8,6 @@ app = Flask(__name__)
 
 # --------- Settings ---------
 MODEL_PATH = "fine_tuned_bert_model.pkl"
-DRIVE_FILE_ID = "1K0rAqhEzBj_CwLvVvBSbKufTj8phML4z"  # <-- your Google Drive file ID
-DOWNLOAD_URL = f"https://drive.google.com/uc?id={DRIVE_FILE_ID}"
 
 # Label mapping for predictions
 label_map = {
@@ -19,27 +16,16 @@ label_map = {
     2: "positive"
 }
 
-# --------- Download & Load Model ---------
-def ensure_model_downloaded():
-    """
-    Download the pickled model from Google Drive if it's not already present.
-    gdown handles large-file confirmation for public Drive links.
-    """
-    if os.path.exists(MODEL_PATH):
-        print(f"✅ Model already exists at {MODEL_PATH}")
-        return
-    print("⬇️ Downloading model from Google Drive…")
-    gdown.download(DOWNLOAD_URL, MODEL_PATH, quiet=False)
-    if not os.path.exists(MODEL_PATH):
-        raise RuntimeError("❌ Model download failed.")
+# --------- Load Model ---------
+if not os.path.exists(MODEL_PATH):
+    raise FileNotFoundError(f"Model file not found at {MODEL_PATH}. Please download it manually.")
 
 try:
-    ensure_model_downloaded()
     with open(MODEL_PATH, "rb") as f:
         model: BertForSequenceClassification = pickle.load(f)
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     model.eval()
-    print("✅ Model loaded from pickle.")
+    print("✅ Model loaded successfully from pickle.")
 except Exception as e:
     model = None
     tokenizer = None
