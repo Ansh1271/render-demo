@@ -1,6 +1,7 @@
 import os
 import torch
 import pickle
+import requests
 from flask import Flask, request, jsonify, render_template
 from transformers import BertTokenizer, BertForSequenceClassification
 
@@ -13,10 +14,30 @@ label_map = {
     2: "positive"
 }
 
-# Load tokenizer & model
+# Model info
 MODEL_PATH = "fine_tuned_bert_model.pkl"
+MODEL_DRIVE_ID = "1K0rAqhEzBj_CwLvVvBSbKufTj8phML4z"  # Your Google Drive file ID
+MODEL_URL = f"https://drive.google.com/uc?export=download&id={MODEL_DRIVE_ID}"
 
+def download_model(url: str, save_path: str):
+    """Download the model from Google Drive if it doesn't exist locally."""
+    if os.path.exists(save_path):
+        print(f"✅ Model already exists at {save_path}")
+        return
+
+    print(f"⬇️ Downloading model from Google Drive...")
+    response = requests.get(url, stream=True)
+    response.raise_for_status()  # Stop if error
+
+    with open(save_path, "wb") as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            if chunk:
+                f.write(chunk)
+    print(f"✅ Model downloaded to {save_path}")
+
+# Download model if needed
 try:
+    download_model(MODEL_URL, MODEL_PATH)
     with open(MODEL_PATH, "rb") as f:
         model: BertForSequenceClassification = pickle.load(f)
     print("✅ Model loaded from pickle")
