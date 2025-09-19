@@ -1,54 +1,51 @@
 import os
 import torch
 import pickle
-import requests
+import gdown
 from flask import Flask, request, jsonify, render_template
 from transformers import BertTokenizer, BertForSequenceClassification
 
 app = Flask(__name__)
 
-# Label mapping
+# --------- Settings ---------
+MODEL_PATH = "fine_tuned_bert_model.pkl"
+DRIVE_FILE_ID = "1K0rAqhEzBj_CwLvVvBSbKufTj8phML4z"  # <-- your Google Drive file ID
+DOWNLOAD_URL = f"https://drive.google.com/uc?id={DRIVE_FILE_ID}"
+
+# Label mapping for predictions
 label_map = {
     0: "negative",
     1: "neutral",
     2: "positive"
 }
 
-# Model info
-MODEL_PATH = "fine_tuned_bert_model.pkl"
-MODEL_DRIVE_ID = "1K0rAqhEzBj_CwLvVvBSbKufTj8phML4z"  # Your Google Drive file ID
-MODEL_URL = f"https://drive.google.com/uc?export=download&id={MODEL_DRIVE_ID}"
-
-def download_model(url: str, save_path: str):
-    """Download the model from Google Drive if it doesn't exist locally."""
-    if os.path.exists(save_path):
-        print(f"✅ Model already exists at {save_path}")
+# --------- Download & Load Model ---------
+def ensure_model_downloaded():
+    """
+    Download the pickled model from Google Drive if it's not already present.
+    gdown handles large-file confirmation for public Drive links.
+    """
+    if os.path.exists(MODEL_PATH):
+        print(f"✅ Model already exists at {MODEL_PATH}")
         return
+    print("⬇️ Downloading model from Google Drive…")
+    gdown.download(DOWNLOAD_URL, MODEL_PATH, quiet=False)
+    if not os.path.exists(MODEL_PATH):
+        raise RuntimeError("❌ Model download failed.")
 
-    print(f"⬇️ Downloading model from Google Drive...")
-    response = requests.get(url, stream=True)
-    response.raise_for_status()  # Stop if error
-
-    with open(save_path, "wb") as f:
-        for chunk in response.iter_content(chunk_size=8192):
-            if chunk:
-                f.write(chunk)
-    print(f"✅ Model downloaded to {save_path}")
-
-# Download model if needed
 try:
-    download_model(MODEL_URL, MODEL_PATH)
+    ensure_model_downloaded()
     with open(MODEL_PATH, "rb") as f:
         model: BertForSequenceClassification = pickle.load(f)
-    print("✅ Model loaded from pickle")
-
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     model.eval()
+    print("✅ Model loaded from pickle.")
 except Exception as e:
     model = None
     tokenizer = None
     print(f"⚠️ Error loading model: {e}")
 
+# --------- Routes ---------
 @app.route("/")
 def home():
     return render_template("index.html")
@@ -61,7 +58,6 @@ def predict():
     try:
         data = request.get_json(force=True)
         text = data.get("text", "").strip()
-
         if not text:
             return jsonify({"error": "No input text provided"}), 400
 
@@ -87,6 +83,7 @@ def predict():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# --------- Entry Point ---------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
